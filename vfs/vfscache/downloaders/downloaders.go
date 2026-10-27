@@ -153,7 +153,18 @@ func (dls *Downloaders) _countErrors(n int64, err error) {
 	}
 	if err != nil {
 		//if err != syscall.ENOSPC {
-		dls.errorCount++
+		if fserrors.IsFatalError(err) || fserrors.IsNoRetryError(err) {
+			// zdrive-desktop patch: a fatal/no-retry error (e.g. a backend
+			// permanently refusing a request - a blocked file, a 4xx)
+			// can never succeed on retry no matter how many times this
+			// loops. Jump straight past maxErrorCount instead of waiting
+			// for maxErrorCount consecutive attempts, so callers give up
+			// on the very first failure rather than retrying something
+			// already known to be permanent.
+			dls.errorCount = maxErrorCount + 1
+		} else {
+			dls.errorCount++
+		}
 		//}
 		dls.lastErr = err
 		fs.Infof(dls.src, "vfs cache: downloader: error count now %d: %v", dls.errorCount, err)
